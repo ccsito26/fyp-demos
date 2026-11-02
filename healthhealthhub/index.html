@@ -1992,6 +1992,90 @@ const Coach = (() => {
     fit();
     render();
   </script>
+<style id="kaki-fit">
+/* ===== Kaki fit layer: phone-sized on real phones, whole phone visible on laptops ===== */
+html.kf-phone,html.kf-phone body{margin:0!important;padding:0!important;height:100%!important;min-height:0!important;overflow:hidden!important;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html.kf-phone .stage{display:block!important;padding:0!important;margin:0!important;gap:0!important;min-height:0!important;height:auto!important}
+html.kf-none{display:none!important}
+html.kf-phone .phone-wrap{width:auto!important;height:auto!important}
+html.kf-phone .phone{position:fixed!important;left:0!important;right:0!important;top:var(--kf-bar)!important;bottom:0!important;width:auto!important;height:auto!important;max-height:none!important;min-height:0!important;margin:0!important;border-radius:0!important;padding:0 0 env(safe-area-inset-bottom,0px)!important;box-shadow:none!important;transform:none!important;z-index:1}
+html.kf-phone .phone #screen{width:100%!important;height:100%!important;max-height:none!important;border-radius:0!important}
+html.kf-phone .coach{display:none!important}
+html.kf-phone.kf-open .coach{display:block!important;position:fixed!important;left:0!important;right:0!important;top:var(--kf-bar)!important;bottom:0!important;width:auto!important;max-width:none!important;max-height:none!important;height:auto!important;margin:0!important;border-radius:0!important;overflow:auto!important;z-index:9998!important;box-shadow:none!important;order:0!important}
+#kf-bar{display:none}
+html.kf-phone #kf-bar{display:flex;position:fixed;left:0;right:0;top:0;z-index:9999;height:var(--kf-bar);box-sizing:border-box;padding:calc(env(safe-area-inset-top,0px) + 6px) 10px 6px;background:#16292A;align-items:stretch;gap:8px}
+#kf-bar button{flex:1;min-height:52px;border:2px solid #FFFFFF;border-radius:14px;background:#FFD54A;color:#16292A;font:700 18px/1.2 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;align-items:center;justify-content:center;gap:10px;padding:4px 12px;cursor:pointer;touch-action:manipulation}
+#kf-bar svg{width:22px;height:22px;flex:none}
+#kf-rotate{display:none}
+html.kf-phone.kf-land #kf-rotate{display:flex;position:fixed;inset:0;z-index:10000;background:#16292A;color:#FFFFFF;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;font:700 22px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#kf-rotate svg{width:72px;height:72px}
+html.kf-phone button,html.kf-phone input,html.kf-phone select,html.kf-phone textarea{touch-action:manipulation}
+html.kf-phone input,html.kf-phone select,html.kf-phone textarea{font-size:max(16px,1em)}
+</style>
+<script id="kaki-fit">
+/* ===== Kaki fit layer =====
+   Real phone (touch screen, small): the practice app fills the screen; the practice guide opens
+   from a bar at the top and closes by itself once a task is picked. Turned sideways: asks to turn upright.
+   Laptop / desktop / embeds: the phone is scaled as a whole so it always fits the window, at any zoom.
+   Add ?phone=1 or ?frame=1 to the address to force either view. */
+(function(){
+ var C={"container": ".stage", "coach": ".coach", "phone": ".phone", "screen": "#screen", "W": 414, "H": 868, "scale": false, "title": "HealthHub practice"},root=document.documentElement,ph=document.querySelector(C.phone),coach=document.querySelector(C.coach);
+ if(!ph)return;
+ var KF=window.__kf={s:1};
+ var bar=document.createElement('div');bar.id='kf-bar';
+ bar.innerHTML='<button type="button" id="kf-guide" aria-expanded="false"></button>';
+ document.body.appendChild(bar);
+ var rot=document.createElement('div');rot.id='kf-rotate';rot.setAttribute('role','alert');
+ rot.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2h8a2 2 0 012 2v16a2 2 0 01-2 2H8a2 2 0 01-2-2V4a2 2 0 012-2zM11 18h2"/></svg><p>Please turn your phone upright to practise.</p>';
+ document.body.appendChild(rot);
+ var gb=document.getElementById('kf-guide');
+ var ICON_OPEN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+ var ICON_CLOSE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+ function setOpen(o){root.classList.toggle('kf-open',o);gb.setAttribute('aria-expanded',o?'true':'false');
+  gb.innerHTML=o?ICON_CLOSE+'<span>Close the guide · back to the app</span>':ICON_OPEN+'<span>Practice guide · choose a task</span>';
+  if(coach&&o)coach.scrollTop=0}
+ gb.addEventListener('click',function(){setOpen(!root.classList.contains('kf-open'))});
+ /* picking a task or a way to practise closes the guide so the app shows */
+ if(coach){
+  coach.addEventListener('click',function(e){var b=e.target.closest('[data-c^="task:"],[data-c="start"],[data-p^="task:"],.tlist button,.lesson');
+   if(b&&root.classList.contains('kf-phone'))setTimeout(function(){setOpen(false)},150)});
+  coach.addEventListener('change',function(e){if(e.target.tagName==='SELECT'&&root.classList.contains('kf-phone'))setTimeout(function(){setOpen(false)},150)});
+ }
+ /* scaled phone on laptops: keep in-app pointers (rings, hands) lined up */
+ if(C.scale){
+  var box=document.createElement('div');box.className='kf-box';box.style.cssText='flex:none;position:relative';
+  ph.parentNode.insertBefore(box,ph);box.appendChild(ph);
+  var gbcr=Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect=function(){var r=gbcr.call(this);
+   if(KF.s===1||!(this===ph||ph.contains(this)))return r;
+   var o=gbcr.call(ph),s=KF.s;return new DOMRect(o.left+(r.left-o.left)/s,o.top+(r.top-o.top)/s,r.width/s,r.height/s)};
+ }
+ function isPhone(){var q=new URLSearchParams(location.search);if(q.get('frame')==='1')return false;if(q.get('phone')==='1')return true;
+  return matchMedia('(hover: none) and (pointer: coarse)').matches&&Math.min(screen.width||9999,screen.height||9999)<600}
+ var first=true;
+ function fit(){
+  var p=isPhone();root.classList.toggle('kf-phone',p);root.classList.toggle('kf-land',p&&innerWidth>innerHeight);
+  if(p){var top=parseFloat(getComputedStyle(root).getPropertyValue('--kf-safe'))||0;
+   root.style.setProperty('--kf-bar',(64)+'px');
+   if(C.scale){KF.s=1;ph.style.transform='';ph.style.transformOrigin='';box.style.width='';box.style.height='';ph.style.height='';ph.style.maxHeight='';ph.style.minHeight=''}
+   if(first){setOpen(false);first=false}
+  }else{root.classList.remove('kf-open');
+   if(C.scale){
+    var bt=box.getBoundingClientRect().top+(window.scrollY||0),avH=innerHeight-Math.max(16,Math.min(bt,innerHeight*.3))-16,avW=innerWidth-32;
+    var s=Math.max(.3,Math.min(1,avH/C.H,avW/C.W));KF.s=s;
+    ph.style.height=C.H+'px';ph.style.maxHeight='none';ph.style.minHeight='0';ph.style.width=C.W+'px';
+    ph.style.transformOrigin='top left';ph.style.transform=s===1?'':'scale('+s+')';
+    box.style.width=Math.round(C.W*s)+'px';box.style.height=Math.round(C.H*s)+'px';
+   }
+  }
+  window.dispatchEvent(new Event('kf-fit'));
+ }
+ /* the bar sits under the notch / status bar */
+ var probe=document.createElement('div');probe.style.cssText='position:fixed;top:0;height:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none';document.body.appendChild(probe);
+ var _fit=fit;fit=function(){_fit();if(root.classList.contains('kf-phone'))root.style.setProperty('--kf-bar',(64+probe.offsetHeight)+'px')};
+ addEventListener('resize',fit);addEventListener('orientationchange',function(){setTimeout(fit,250)});
+ fit();
+})();
+</script>
 </body>
 </html>
-
