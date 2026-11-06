@@ -713,7 +713,7 @@ S.home = () => {
     <div class="sec-h"><b>Your accounts</b><span>
       <button class="ib" data-a="toggleHide" aria-label="${s.hideBal?'Show':'Hide'} balances">${ic(s.hideBal?'eyeoff':'eye')}</button>
       <button class="ib" data-a="na" aria-label="Account settings">${ic('gear')}</button></span></div>
-    <button class="acct" data-a="go:account" data-g="acct-dep"><b>Deposits<span class="cnt">1</span></b><span class="acct-r"><span>Available balance</span><b>SGD ${money(s.balance)}</b></span></button>
+    <button class="acct" data-a="go:account" data-g="acct-dep"><b>Deposits<span class="cnt">1</span></b><span class="acct-r"><span>(PRACTICE) Available balance</span><b>SGD ${money(s.balance)}</b></span></button>
     <button class="acct" data-a="go:wallet" data-g="acct-wallet"><b>PayLah!</b><span class="acct-r"><span>Total wallet balance</span><b>SGD ${money(s.wallet)}</b></span></button>
   </div>
   ${navBar('home')}</div>`;
