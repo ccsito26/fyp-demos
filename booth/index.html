@@ -120,7 +120,7 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
     <div class="start" id="start">
       <div>
         <h1>Booth</h1>
-        <p id="startMsg">Twenty-seven live camera effects, a 3-2-1 countdown, four-up photo strips and short clips. Everything stays on this iPad.</p>
+        <p id="startMsg">Thirty-five live camera effects, including hearts that follow your face, a 3-2-1 countdown, four-up photo strips and short clips. Everything stays on this iPad.</p>
         <button class="big" id="startBtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Start camera</button>
         <button class="link" id="startPhoto">Or try the effects on a photo</button>
       </div>
@@ -162,10 +162,12 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 const FX = [
   [['Sepia',1],['Black & White',2],['Glow',3],['Comic Book',4],['Normal',0],['Colored Pencil',6],['Thermal Camera',7],['X-Ray',8],['Pop Art',9]],
   [['Bulge',10],['Dent',11],['Twirl',12],['Squeeze',13],['Normal',0],['Mirror',15],['Light Tunnel',16],['Fish Eye',17],['Stretch',18]],
-  [['Kaleidoscope',20],['Neon',21],['Halftone',22],['Pixels',23],['Normal',0],['Ripple',25],['Night Vision',26],['Vintage',27],['Spectral',28]]
+  [['Kaleidoscope',20],['Neon',21],['Halftone',22],['Pixels',23],['Normal',0],['Ripple',25],['Night Vision',26],['Vintage',27],['Spectral',28]],
+  [['Heart Halo',30],['Heart Eyes',31],['Floating Hearts',32],['Heart Frame',33],['Normal',0],['Heart Glow',35],['Blushing',36],['Heart Lens',37],['Heart Shower',38]]
 ];
 const NAME = {}; FX.flat().forEach(([n,i]) => NAME[i] = n);
-const MOVABLE = new Set([10,11,12,13,15,16,17,18,20,25]);
+const HEARTS = new Set([30,31,33,36,37]);
+const MOVABLE = new Set([10,11,12,13,15,16,17,18,20,25,30,31,33,36,37]);
 const $ = id => document.getElementById(id);
 const canvas = $('gl'), video = $('video'), stage = $('stage'), grid = $('grid');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -176,7 +178,8 @@ const FS = `precision highp float;
 varying vec2 v;
 uniform sampler2D T;
 uniform vec2 uScale,uOffset,uCell,uCenter;
-uniform float uMirror,uTime;
+uniform float uMirror,uTime,uHasFace;
+uniform vec4 uFace,uEyes;
 uniform int uFx;
 float shadeK;
 vec3 tex(vec2 uv){uv=clamp(uv,0.,1.);vec2 t=uOffset+uv*uScale;if(uMirror>.5)t.x=1.-t.x;return texture2D(T,t).rgb;}
@@ -246,9 +249,93 @@ vec3 color(vec2 uv){
   if(uFx==28){vec2 d=(uv-.5)*.022;return vec3(tex(uv+d).r,c.g,tex(uv-d).b);}
   return c;
 }
+float dot2(vec2 p){return dot(p,p);}
+float sdHeart(vec2 p){p.x=abs(p.x);
+  if(p.y+p.x>1.)return sqrt(dot2(p-vec2(.25,.75)))-.35355;
+  return sqrt(min(dot2(p-vec2(0.,1.)),dot2(p-.5*max(p.x+p.y,0.))))*sign(p.x-p.y);}
+/* heart-local coords: c = centre, s = height (q units), a = tilt */
+vec2 hLocal(vec2 q,vec2 c,float s,float a){vec2 l=rot(q-c,a)/(s/1.1);return vec2(l.x,-l.y+.55);}
+vec4 heart(vec2 q,vec2 c,float s,float a,vec3 base){
+  vec2 l=hLocal(q,c,s,a);if(abs(l.x)>.8||l.y<-.2||l.y>1.3)return vec4(0.);
+  float d=sdHeart(l);float px=1.3/(uCell.y*s/1.1);
+  float al=1.-smoothstep(-px,px,d);
+  vec3 col=mix(base*.6,min(base*1.2+.1,1.),clamp(l.y*.85,0.,1.));
+  col=mix(col,base*.42,smoothstep(-.14,0.,d));
+  float hl=1.-smoothstep(0.,.12,length((l-vec2(-.3,.8))*vec2(1.,1.5)));
+  col=mix(col,vec3(1.),hl*.9);
+  return vec4(col,al);
+}
+vec3 over(vec3 c,vec4 h){return mix(c,h.rgb,h.a);}
+vec2 toUV(vec2 t){if(uMirror>.5)t.x=1.-t.x;return (t-uOffset)/uScale;}
+vec3 PINK(float h){return h<.33?vec3(.93,.1,.25):(h<.66?vec3(1.,.38,.6):vec3(.98,.62,.78));}
+vec3 love(vec2 uv){
+  float asp=uCell.x/uCell.y;vec2 k=vec2(asp,1.);vec2 q=uv*k;
+  vec2 fc,eR,eL;float fw;
+  if(uHasFace>.5){fc=toUV(uFace.xy)*k;fw=uFace.z/uScale.x*asp;eR=toUV(uEyes.xy)*k;eL=toUV(uEyes.zw)*k;}
+  else{fc=uCenter*k;fw=.3;eR=fc+vec2(-.2,-.12)*fw;eL=fc+vec2(.2,-.12)*fw;}
+  float t=uTime;
+  vec3 c;
+  if(uFx==37){/* heart lens: zoom inside a heart around the face */
+    vec2 hc=fc+vec2(0.,.06*fw);float s=fw*2.1;float d=sdHeart(hLocal(q,hc,s,0.))*s/1.1;
+    if(d<0.){vec2 z=fc+(q-fc)*.68;c=tex(z/k);c=mix(c,c*vec3(1.06,.95,1.),.5);}
+    else{c=tex(uv);c=mix(vec3(L(c)),c,.4)*.55+vec3(.2,.05,.1);}
+    float rim=1.-smoothstep(.004,.011,abs(d));c=mix(c,vec3(1.,.55,.72),rim);
+    return c;}
+  c=tex(uv);
+  if(uFx==33){/* heart frame */
+    vec2 hc=fc+vec2(0.,.1*fw);float s=fw*2.5;float d=sdHeart(hLocal(q,hc,s,0.))*s/1.1;
+    vec2 g=fract(q*7.)-.5;float sd=sdHeart(vec2(g.x,-g.y+.5)*2.6);
+    vec3 pat=sd<0.?vec3(1.,.52,.7):vec3(1.,.8,.88);
+    c=mix(c,c*.7,smoothstep(-.04,0.,d));
+    c=mix(c,pat,smoothstep(-.002,.002,d));
+    c=mix(c,vec3(1.),1.-smoothstep(.004,.009,abs(d-.006)));
+    return c;}
+  if(uFx==35){/* heart glow */
+    vec3 b=vec3(0.);for(int i=0;i<8;i++){float a=float(i)*.785;b+=tex(uv+vec2(cos(a)/asp,sin(a))*.02);}
+    b/=8.;c=1.-(1.-c)*(1.-b*.6);c=mix(c,c*vec3(1.04,.86,.93)+vec3(.07,0.,.04),.6);
+    for(int i=0;i<9;i++){float fi=float(i),h=hash(vec2(fi,2.3));
+      vec2 p=vec2(fract(h*13.7+t*.01*(fi-4.))*asp,fract(h*7.1-t*.025*(1.+h)));
+      float s=.12+.14*hash(vec2(fi,9.1));float d=sdHeart(hLocal(q,p,s,(h-.5)*.6));
+      c+=vec3(1.,.45,.65)*(1.-smoothstep(-.35,.25,d))*.28;}
+    return min(c,1.);}
+  if(uFx==36){/* blushing cheeks + popping hearts */
+    for(int i=0;i<2;i++){vec2 e=i==0?eR:eL;vec2 ch=e+vec2((i==0?-1.:1.)*.06*fw,.33*fw);
+      float m=1.-smoothstep(0.,.17*fw,length((q-ch)*vec2(1.,1.5)));c=mix(c,c*vec3(1.,.62,.66)+vec3(.12,0.,.03),m*.75);}
+    for(int i=0;i<3;i++){float fi=float(i);float ph=fract(t*.45+fi/3.);
+      vec2 p=fc+vec2((fi-1.)*.38*fw+sin(t*3.+fi)*.03*fw,-.75*fw-ph*.55*fw);
+      vec4 h=heart(q,p,fw*(.12+.1*ph),(fi-1.)*.3,PINK(fi/3.+.1));h.a*=smoothstep(1.,.65,ph)*smoothstep(0.,.12,ph);c=over(c,h);}
+    return c;}
+  if(uFx==31){/* heart eyes */
+    float pulse=1.+.1*sin(t*9.);
+    c=over(c,heart(q,eR,fw*.36*pulse,-.12,vec3(.95,.08,.25)));
+    c=over(c,heart(q,eL,fw*.36*pulse,.12,vec3(.95,.08,.25)));
+    return c;}
+  if(uFx==30){/* hearts circling the head */
+    vec2 oc=fc+vec2(0.,-.7*fw);vec2 hc=fc+vec2(0.,-.18*fw);
+    float inHead=1.-smoothstep(.95,1.05,length((q-hc)/vec2(.6*fw,.85*fw)));
+    for(int i=0;i<7;i++){float th=t*1.7+float(i)*.8976;float dep=sin(th);
+      vec2 p=oc+vec2(cos(th)*.72*fw,dep*.17*fw);
+      vec4 h=heart(q,p,fw*(.2+.06*dep),cos(th)*.35,PINK(fract(float(i)*.37)));
+      h.rgb*=.9+.1*dep;if(dep<0.)h.a*=1.-inHead;c=over(c,h);}
+    return c;}
+  if(uFx==32){/* floating hearts rising */
+    for(int i=0;i<16;i++){float fi=float(i),h=hash(vec2(fi,1.7)),sp=.06+.07*hash(vec2(fi,4.2));
+      float ph=fract(t*sp+h);vec2 p=vec2(fract(h*7.31)*asp+sin(t*1.4+fi)*.03,1.15-ph*1.35);
+      vec4 hh=heart(q,p,.05+.07*hash(vec2(fi,8.8)),sin(t*1.2+fi)*.25,PINK(hash(vec2(fi,5.5))));
+      hh.a*=smoothstep(1.,.75,ph);c=over(c,hh);}
+    return c;}
+  if(uFx==38){/* heart shower */
+    for(int i=0;i<24;i++){float fi=float(i),h=hash(vec2(fi,3.1)),sp=.1+.12*hash(vec2(fi,6.4));
+      float ph=fract(t*sp+h);vec2 p=vec2(fract(h*5.17)*asp+sin(t*2.+fi)*.02,-.08+ph*1.2);
+      vec3 col=hash(vec2(fi,7.7))<.2?vec3(1.,.95,.97):PINK(hash(vec2(fi,2.2)));
+      c=over(c,heart(q,p,.035+.04*hash(vec2(fi,9.9)),t*(h-.5)*3.,col));}
+    return c;}
+  return c;
+}
 void main(){
   shadeK=1.;
   if(uFx==9){gl_FragColor=vec4(popArt(v),1.);return;}
+  if(uFx>=30){gl_FragColor=vec4(love(v),1.);return;}
   vec2 uv=warp(v);
   gl_FragColor=vec4(color(uv)*shadeK,1.);
 }`;
@@ -263,7 +350,7 @@ if (gl) {
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
   const a = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
-  ['uScale','uOffset','uCell','uCenter','uMirror','uTime','uFx'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+  ['uScale','uOffset','uCell','uCenter','uMirror','uTime','uFx','uHasFace','uFace','uEyes'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
   const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
   [[gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE],[gl.TEXTURE_MIN_FILTER, gl.LINEAR],[gl.TEXTURE_MAG_FILTER, gl.LINEAR]].forEach(([k,v]) => gl.texParameteri(gl.TEXTURE_2D, k, v));
   gl.clearColor(0, 0, 0, 1);
@@ -296,7 +383,41 @@ function drawCell(x, y, w, h, fx, t) {
   gl.uniform2f(U.uScale, sx, sy); gl.uniform2f(U.uOffset, (1 - sx) / 2, (1 - sy) / 2);
   gl.uniform2f(U.uCell, w, h); gl.uniform2f(U.uCenter, S.center[0], S.center[1]);
   gl.uniform1f(U.uMirror, S.mirror); gl.uniform1f(U.uTime, t); gl.uniform1i(U.uFx, fx);
+  const F = FACE.f, has = F && performance.now() - FACE.seen < 800;
+  gl.uniform1f(U.uHasFace, has ? 1 : 0);
+  if (has) { gl.uniform4f(U.uFace, F[0], F[1], F[2], F[3]); gl.uniform4f(U.uEyes, F[4], F[5], F[6], F[7]); }
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+/* ---------- face tracking (MediaPipe, loaded only when a heart effect is shown) ---------- */
+const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const FACE = {state: 'idle', det: null, f: null, seen: 0, last: 0, ts: 0};
+async function loadFace() {
+  if (FACE.state !== 'idle') return; FACE.state = 'loading';
+  try {
+    const m = await import(MP + '/vision_bundle.mjs');
+    const files = await m.FilesetResolver.forVisionTasks(MP + '/wasm');
+    FACE.det = await m.FaceDetector.createFromOptions(files, {
+      baseOptions: {modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite', delegate: 'CPU'},
+      runningMode: 'VIDEO', minDetectionConfidence: .5});
+    FACE.state = 'ready';
+  } catch (e) { FACE.state = 'failed'; console.warn('face tracking', e); toast('Face tracking unavailable. Drag to place the hearts.'); }
+}
+function trackFace() {
+  const wants = S.gridOpen ? S.page === 3 : HEARTS.has(S.fx);
+  if (!wants || !S.src) return;
+  if (FACE.state === 'idle') loadFace();
+  const now = performance.now();
+  if (FACE.state !== 'ready' || now - FACE.last < 60) return;
+  FACE.last = now; FACE.ts = Math.max(FACE.ts + 1, Math.round(now));
+  let r; try { r = FACE.det.detectForVideo(S.src, FACE.ts); } catch (e) { return; }
+  const d = r && r.detections && r.detections[0]; if (!d) return;
+  const b = d.boundingBox, k = d.keypoints || [], W = S.srcW, H = S.srcH;
+  const n = [(b.originX + b.width / 2) / W, (b.originY + b.height / 2) / H, b.width / W, b.height / H,
+    k[0] ? k[0].x : 0, k[0] ? k[0].y : 0, k[1] ? k[1].x : 0, k[1] ? k[1].y : 0];
+  const fresh = !FACE.f || now - FACE.seen > 800;
+  FACE.f = fresh ? n : FACE.f.map((v, i) => v + (n[i] - v) * .55);
+  FACE.seen = now;
 }
 function render(t = performance.now() / 1000) {
   if (!gl || !S.src) return;
@@ -307,6 +428,7 @@ function render(t = performance.now() / 1000) {
   } else if (S.dirty) {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, S.src); S.dirty = false;
   }
+  trackFace();
   gl.disable(gl.SCISSOR_TEST); gl.viewport(0, 0, canvas.width, canvas.height); gl.clear(gl.COLOR_BUFFER_BIT);
   gl.enable(gl.SCISSOR_TEST);
   if (S.gridOpen) FX[S.page].forEach((f, i) => cellRects[i] && drawCell(...cellRects[i], f[1], t));
@@ -386,7 +508,8 @@ function openGrid(open) {
 function page(d) { S.page = (S.page + d + FX.length) % FX.length; buildGrid(); }
 function pickFx(id) {
   S.fx = id; $('fxName').textContent = NAME[id]; S.center = [.5, .45]; openGrid(false);
-  if (MOVABLE.has(id)) toast('Drag on the picture to move the effect');
+  if (HEARTS.has(id)) toast(FACE.state === 'failed' ? 'Drag to place the hearts' : 'The hearts follow your face');
+  else if (MOVABLE.has(id)) toast('Drag on the picture to move the effect');
 }
 grid.addEventListener('click', e => { const b = e.target.closest('.cell'); if (b && !swiped) pickFx(FX[S.page][+b.dataset.i][1]); });
 let sx0 = null, swiped = false;
@@ -552,7 +675,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && S.r
 
 if (!gl) setMsg('This device could not start WebGL, which Booth needs for its effects.', true);
 setMode('photo'); loadShots();
-window.__booth = {S, pickFx, openGrid, page};
+window.__booth = {S, pickFx, openGrid, page, FACE};
 }
 </script>
 </body>
